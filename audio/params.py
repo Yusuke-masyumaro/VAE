@@ -6,4 +6,4 @@ embedding_dim = 64
 num_embeddings = 512
 commitment_cost = 0.25
 lr = 2e-4
-batch_size = 8
+batch_size = 16
