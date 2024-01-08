@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 
 import params as params
 import model as model
+import os
 
 class ESC_dataset(Dataset):
     def __init__(self, df, path):
@@ -26,11 +27,11 @@ class ESC_dataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        return self.data_list[idx]\
+        return self.data_list[idx]
 
 if __name__ == '__main__':
-    df = pd.read_csv('../dataset/ESC-50-master/meta/esc50.csv')
-    file_path = '../dataset/ESC-50-master/audio/'
+    df = pd.read_csv('../../dataset/ESC-50-master/meta/esc50.csv')
+    file_path = '../../dataset/ESC-50-master/audio/'
     train_df, test_df = train_test_split(df, test_size = 0.2)
     train_dataset = ESC_dataset(train_df, file_path)
     test_dataset = ESC_dataset(test_df, file_path)
@@ -71,4 +72,5 @@ if __name__ == '__main__':
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, train_losses / len(train_loader.dataset), train_recon_loss / len(train_loader.dataset)))
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, test_losses / len(test_loader.dataset), test_recon_loss / len(test_loader.dataset)))
         print('output: {}, x: {}'.format(output['output'].shape, x.shape))
-        torch.save(model.state_dict(), '../model/model.pth')
+        os.makedirs('./model', exist_ok = True)
+        torch.save(model.state_dict(), './model/model.pth')
