@@ -5,4 +5,4 @@ num_residual_layers = 2
 embedding_dim = 64
 num_embeddings = 256
 lr = 2e-4
-batch_size = 8
+batch_size = 16
