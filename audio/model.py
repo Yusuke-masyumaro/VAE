@@ -110,7 +110,7 @@ def get_model(data_variance = None):
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
     pre_vq_conv1 = nn.Conv1d(in_channels = params.hidden_dim, out_channels = params.embedding_dim, kernel_size = 1, stride = 1)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
-    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.num_embeddings, kmeans_init = True)
+    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.num_embeddings, kmeans_init = True)
     model = VQVAE(encoder, decoder, vq, pre_vq_conv1, data_variance = data_variance)
     optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
     return model, optimizer
