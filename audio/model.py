@@ -8,7 +8,7 @@ from vector_quantize_pytorch import VectorQuantize, ResidualVQ
 
 import params as params
 
-relu = nn.ReLU()
+relu = nn.LeakyReLU(0.2)
 
 class Residual(nn.Module):
     def __init__(self, in_channels, hidden_dim, num_residual_hidden):
@@ -80,7 +80,7 @@ class Decoder(nn.Module):
                 x = layer(x)
                 x = relu(x)
         x = self.d_layer_three(x)
-        return torch.sigmoid(x)
+        return torch.tanh(x)
 
 class VQVAE(nn.Module):
     def __init__(self, encoder, decoder, vq, pre_vq_conv1, data_variance = None):

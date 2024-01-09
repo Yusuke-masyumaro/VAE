@@ -1,5 +1,5 @@
 ./audio/__pycache__/
-./audio/sample/
+./audio/sampling/
 ./images/__pycache__/
 /dataset/
 ./audio/test.ipynb
