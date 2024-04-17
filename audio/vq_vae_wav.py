@@ -95,5 +95,13 @@ if __name__ == '__main__':
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, train_losses / len(train_loader.dataset), train_recon_loss / len(train_loader.dataset)))
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, test_losses / len(test_loader.dataset), test_recon_loss / len(test_loader.dataset)))
         print('output: {}, x: {}'.format(output['output'].shape, x.shape))
+        
+        wandb.log({
+            "train_loss": train_losses / len(train_loader.dataset),
+            "train_recon_loss": train_recon_loss / len(train_loader.dataset),
+            "test_loss": test_losses / len(test_loader.dataset),
+            "test_recon_loss": test_recon_loss / len(test_loader.dataset)
+        })
+        
         os.makedirs('./model', exist_ok = True)
         torch.save(model.state_dict(), './model/model.pth')
