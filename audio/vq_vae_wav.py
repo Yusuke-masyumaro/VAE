@@ -12,6 +12,29 @@ from sklearn.model_selection import train_test_split
 import params as params
 import model as model
 import os
+import wandb
+
+epochs = 50
+
+wandb.init(
+    # set the wandb project where this run will be logged
+    project="VAE-ESC50",
+
+    # track hyperparameters and run metadata
+    config={
+    'in_channels':params.in_channels,
+    'hidden_dim':params.hidden_dim,
+    'residual_hidden_dim':params.residual_hidden_dim,
+    'num_residual_layers':params.num_residual_layers,
+    'embedding_dim':params.embedding_dim,
+    'num_embeddings':params.num_embeddings,
+    'learning_rate':params.learning_rate,
+    'batch_size':params.batch_size,
+    "architecture": "VAE",
+    "dataset": "ESC50",
+    "epochs": epochs,
+    }
+)
 
 class ESC_dataset(Dataset):
     def __init__(self, df, path):
@@ -30,8 +53,8 @@ class ESC_dataset(Dataset):
         return self.data_list[idx]
 
 if __name__ == '__main__':
-    df = pd.read_csv('../../dataset/ESC-50-master/meta/esc50.csv')
-    file_path = '../../dataset/ESC-50-master/audio/'
+    df = pd.read_csv('../dataset/ESC-50-master/meta/esc50.csv')
+    file_path = '../dataset/ESC-50-master/audio/'
     train_df, test_df = train_test_split(df, test_size = 0.2)
     train_dataset = ESC_dataset(train_df, file_path)
     test_dataset = ESC_dataset(test_df, file_path)
@@ -44,7 +67,7 @@ if __name__ == '__main__':
     model, optimizer = model.get_model(train_variances)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
-    for epoch in range(10):
+    for epoch in range(epochs):
         train_losses = 0.0
         train_recon_loss = 0.0
         for _, data in tqdm(enumerate(train_loader)):

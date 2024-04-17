@@ -1,4 +1,6 @@
-./audio/__pycache__/
-./audio/sample/
-./images/__pycache__/
+/audio/__pycache__/
+/audio/sample/
+/images/__pycache__/
 /dataset/
+/audio/wandb/
+*.pyc

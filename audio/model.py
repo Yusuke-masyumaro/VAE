@@ -112,5 +112,5 @@ def get_model(data_variance = None):
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
     vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.num_embeddings, kmeans_init = True)
     model = VQVAE(encoder, decoder, vq, pre_vq_conv1, data_variance = data_variance)
-    optimizer = torch.optim.Adam(model.parameters(), lr = params.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr = params.learning_rate)
     return model, optimizer
