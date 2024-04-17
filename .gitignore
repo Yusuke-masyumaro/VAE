@@ -3,4 +3,5 @@
 /images/__pycache__/
 /dataset/
 /audio/wandb/
+/audio/model/
 *.pyc
