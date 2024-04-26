@@ -41,9 +41,9 @@ class Encoder(nn.Module):
         self.num_residual_layers = num_residual_layers
         self.residual_hidden_dim = residual_hidden_dim
 
-        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 3, stride = 1, padding = 1)
-        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 3, stride = 1, padding = 1)
-        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim, kernel_size = 3, stride = 1, padding = 1)
+        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
         self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
 
         self.encoder_layer = nn.ModuleList([self.e_layer_one, self.e_layer_two, self.e_layer_three])
@@ -65,10 +65,10 @@ class Decoder(nn.Module):
         self.num_residual_layers = num_residual_layers
         self.residual_hidden_dim = residual_hidden_dim
 
-        self.d_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 3, stride = 1, padding = 1)
+        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 8, stride = 2, padding = 2)
         self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
-        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 3, stride = 1, padding = 1)
-        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 3, stride = 1, padding = 1)
+        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 8, stride = 2, padding = 2)
+        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 4, stride = 2, padding = 2)
 
         self. decoder_layer = nn.ModuleList([self.d_layer_one, self.residual_stack, self.d_layer_two])
 
@@ -76,9 +76,11 @@ class Decoder(nn.Module):
         for layer in self.decoder_layer:
             if layer == self.d_layer_two:
                 x = layer(x)
+                print(x.shape)
             else:
                 x = layer(x)
                 x = relu(x)
+                print(x.shape)
         x = self.d_layer_three(x)
         return torch.tanh(x)
 
