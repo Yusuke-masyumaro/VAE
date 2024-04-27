@@ -5,3 +5,4 @@
 /audio/wandb/
 /audio/model/
 *.pyc
+*.ipynb

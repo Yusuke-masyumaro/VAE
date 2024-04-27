@@ -12,14 +12,6 @@ wandb.init(
     "architecture": "CNN",
     "dataset": "CIFAR-100",
     "epochs": 10,
-"in_channels" : params.in_channels,
-"hidden_dim" : params.hidden_dim,
-"residual_hidden_dim" : params.residual_hidden_dim,
-"num_residual_layers" : params.num_residual_layers,
-"embedding_dim" : params.embedding_dim,
-"num_embeddings" : params.num_embeddings,
-"lr = 2e-4" : params.lr = 2e-4,
-"batch_size" : params.batch_size,
     }
 )
 
