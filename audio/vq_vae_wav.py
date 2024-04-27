@@ -43,7 +43,7 @@ class ESC_dataset(Dataset):
         self.data_list = []
         for file_name in tqdm(df['filename'].values):
             wav, sr = torchaudio.load(self.path + file_name)
-            wav = torchaudio.transforms.Resample(orig_freq = sr, new_freq = 22050)(wav)
+            wav = torchaudio.transforms.Resample(orig_freq = sr, new_freq = 16000)(wav)
             self.data_list.append(wav)
 
     def __len__(self):
@@ -94,6 +94,7 @@ if __name__ == '__main__':
 
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, train_losses / len(train_loader.dataset), train_recon_loss / len(train_loader.dataset)))
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, test_losses / len(test_loader.dataset), test_recon_loss / len(test_loader.dataset)))
+<<<<<<< HEAD
         print('output: {}, x: {}'.format(output['output'].shape, x.shape))
         
         wandb.log({
@@ -103,5 +104,7 @@ if __name__ == '__main__':
             "test_recon_loss": test_recon_loss / len(test_loader.dataset)
         })
         
+=======
+>>>>>>> leakyReLU_activation
         os.makedirs('./model', exist_ok = True)
         torch.save(model.state_dict(), './model/model.pth')
