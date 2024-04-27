@@ -1,0 +1,28 @@
+
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1600/1600 [00:03<00:00, 511.16it/s]
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 400/400 [00:00<00:00, 509.67it/s]
+
+
+3it [00:08,  2.69s/it]
+Traceback (most recent call last):
+  File "/app/audio/vq_vae_wav.py", line 75, in <module>
+    output = model(x)
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/app/audio/model.py", line 97, in forward
+    vq_quantize, embedding_idx, vq_loss = self.vq(z_permute)
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/vector_quantize_pytorch/residual_vq.py", line 177, in forward
+    quantized, *rest = layer(
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.10/dist-packages/vector_quantize_pytorch/vector_quantize_pytorch.py", line 984, in forward
+    loss = torch.tensor([0.], device = device, requires_grad = self.training)
+KeyboardInterrupt
