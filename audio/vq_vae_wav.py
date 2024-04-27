@@ -52,12 +52,35 @@ class ESC_dataset(Dataset):
     def __getitem__(self, idx):
         return self.data_list[idx]
 
+class ESC_dataset_16K(Dataset):
+    def __init__(self, wav_list, path):
+        self.path = path
+        self.data_list = []
+        for file_name in tqdm(wav_list):
+            wav, _ = torchaudio.load(self.path + file_name)
+            self.data_list.append(wav)
+    
+    def __len__(self):
+        return len(self.data_list)
+    
+    def __getitem__(self, idx):
+        return self.data_list[idx]
+
 if __name__ == '__main__':
+    '''
     df = pd.read_csv('../dataset/ESC-50-master/meta/esc50.csv')
     file_path = '../dataset/ESC-50-master/audio/'
     train_df, test_df = train_test_split(df, test_size = 0.2)
     train_dataset = ESC_dataset(train_df, file_path)
     test_dataset = ESC_dataset(test_df, file_path)
+    '''
+    
+    file_path = '../dataset/ESC-50-master_16K/'
+    data_list = os.listdir(file_path)
+    train_list, test_list = train_test_split(data_list, test_size = 0.2)
+    train_dataset = ESC_dataset_16K(train_list, file_path)
+    test_dataset = ESC_dataset_16K(test_list, file_path)
+    
     train_variance = []
     for wav in train_dataset:
         train_variance.append(wav)
@@ -94,7 +117,6 @@ if __name__ == '__main__':
 
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, train_losses / len(train_loader.dataset), train_recon_loss / len(train_loader.dataset)))
         print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, test_losses / len(test_loader.dataset), test_recon_loss / len(test_loader.dataset)))
-<<<<<<< HEAD
         print('output: {}, x: {}'.format(output['output'].shape, x.shape))
         
         wandb.log({
@@ -104,7 +126,5 @@ if __name__ == '__main__':
             "test_recon_loss": test_recon_loss / len(test_loader.dataset)
         })
         
-=======
->>>>>>> leakyReLU_activation
         os.makedirs('./model', exist_ok = True)
         torch.save(model.state_dict(), './model/model.pth')

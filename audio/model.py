@@ -41,9 +41,9 @@ class Encoder(nn.Module):
         self.num_residual_layers = num_residual_layers
         self.residual_hidden_dim = residual_hidden_dim
 
-        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 11, stride = 5, padding = 4)
+        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 11, stride = 5, padding = 4)
+        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim, kernel_size = 11, stride = 5, padding = 4)
         self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
 
         self.encoder_layer = nn.ModuleList([self.e_layer_one, self.e_layer_two, self.e_layer_three])
@@ -65,10 +65,10 @@ class Decoder(nn.Module):
         self.num_residual_layers = num_residual_layers
         self.residual_hidden_dim = residual_hidden_dim
 
-        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 8, stride = 2, padding = 2)
+        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 5, stride = 5, padding = 0)
         self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
-        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 8, stride = 2, padding = 2)
-        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 4, stride = 2, padding = 2)
+        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 5, padding = 0)
+        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 5, stride = 5, padding = 0)
 
         self. decoder_layer = nn.ModuleList([self.d_layer_one, self.residual_stack, self.d_layer_two])
 
@@ -82,6 +82,7 @@ class Decoder(nn.Module):
                 x = relu(x)
                 print(x.shape)
         x = self.d_layer_three(x)
+        print(x.shape)
         return torch.tanh(x)
 
 class VQVAE(nn.Module):
@@ -110,7 +111,7 @@ class VQVAE(nn.Module):
 def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
-    pre_vq_conv1 = nn.Conv1d(in_channels = params.hidden_dim, out_channels = params.embedding_dim, kernel_size = 1, stride = 1)
+    pre_vq_conv1 = nn.Conv1d(in_channels = params.hidden_dim, out_channels = params.embedding_dim, kernel_size = 3, stride = 1, paddin = 0)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
     vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.num_embeddings, kmeans_init = True)
     model = VQVAE(encoder, decoder, vq, pre_vq_conv1, data_variance = data_variance)
