@@ -1,8 +1,7 @@
-./audio/__pycache__/
-./audio/sampling/
-./images/__pycache__/
-/dataset/
-./audio/test.ipynb
-./audio/wandb/
+audio/__pycache__/
+audio/sampling/
+images/__pycache__/
+dataset/
+audio/wandb/
 *.ipynb
 *.__pycache__
