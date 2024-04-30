@@ -65,10 +65,10 @@ class Decoder(nn.Module):
         self.num_residual_layers = num_residual_layers
         self.residual_hidden_dim = residual_hidden_dim
 
-        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 5, stride = 5, padding = 0)
+        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 11, stride = 5, padding = 3)
         self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
-        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 5, padding = 0)
-        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 5, stride = 5, padding = 0)
+        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 11, stride = 5, padding = 3)
+        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = 1, kernel_size = 11, stride = 5, padding = 3)
 
         self. decoder_layer = nn.ModuleList([self.d_layer_one, self.residual_stack, self.d_layer_two])
 
@@ -76,13 +76,10 @@ class Decoder(nn.Module):
         for layer in self.decoder_layer:
             if layer == self.d_layer_two:
                 x = layer(x)
-                print(x.shape)
             else:
                 x = layer(x)
                 x = relu(x)
-                print(x.shape)
         x = self.d_layer_three(x)
-        print(x.shape)
         return torch.tanh(x)
 
 class VQVAE(nn.Module):
@@ -102,7 +99,8 @@ class VQVAE(nn.Module):
         output = self.decoder(vq_quantize_reshape)
         if self.data_variance:
             reconstructed_error = torch.mean(torch.square(output - x)) / self.data_variance
-            vq_loss = vq_loss.sum() / len(vq_loss)
+            print(vq_loss)
+            vq_loss = vq_loss.mean()
             loss = reconstructed_error + vq_loss
             return {'z': z, 'x': x, 'loss': loss, 'reconstructed_error': reconstructed_error, 'vq_output': vq_quantize, 'output': output}
         else:
@@ -111,7 +109,7 @@ class VQVAE(nn.Module):
 def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
-    pre_vq_conv1 = nn.Conv1d(in_channels = params.hidden_dim, out_channels = params.embedding_dim, kernel_size = 3, stride = 1, paddin = 0)
+    pre_vq_conv1 = nn.Conv1d(in_channels = params.hidden_dim, out_channels = params.embedding_dim, kernel_size = 3, stride = 1, padding = 1)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
     vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.num_embeddings, kmeans_init = True)
     model = VQVAE(encoder, decoder, vq, pre_vq_conv1, data_variance = data_variance)

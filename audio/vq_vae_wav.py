@@ -80,6 +80,7 @@ if __name__ == '__main__':
     train_list, test_list = train_test_split(data_list, test_size = 0.2)
     train_dataset = ESC_dataset_16K(train_list, file_path)
     test_dataset = ESC_dataset_16K(test_list, file_path)
+    print('train: {}, test: {}'.format(len(train_dataset), len(test_dataset)))
     
     train_variance = []
     for wav in train_dataset:
