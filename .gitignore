@@ -1,4 +1,4 @@
-audio/__pycache__/
+*/__pycache__/
 audio/sampling/
 images/__pycache__/
 dataset/

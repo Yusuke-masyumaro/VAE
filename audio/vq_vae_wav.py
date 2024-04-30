@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
+from torch.utils.data import ConcatDataset
 
 import params as params
 import model as model
@@ -52,7 +53,7 @@ class ESC_dataset(Dataset):
     def __getitem__(self, idx):
         return self.data_list[idx]
 
-class ESC_dataset_16K(Dataset):
+class Dataset_16K(Dataset):
     def __init__(self, wav_list, path):
         self.path = path
         self.data_list = []
@@ -75,11 +76,24 @@ if __name__ == '__main__':
     test_dataset = ESC_dataset(test_df, file_path)
     '''
     
-    file_path = '../dataset/ESC-50-master_16K/'
+    '''file_path = '../dataset/ESC-50-master_16K/'
     data_list = os.listdir(file_path)
     train_list, test_list = train_test_split(data_list, test_size = 0.2)
     train_dataset = ESC_dataset_16K(train_list, file_path)
     test_dataset = ESC_dataset_16K(test_list, file_path)
+    '''
+    path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/']
+    train_dataset_list = []
+    test_dataset_list = []
+    for i in path_list:
+        train_list, test_list = train_test_split(os.listdir(i), test_size = 0.2)
+        train_data = Dataset_16K(train_list, i)
+        test_data = Dataset_16K(test_list, i)
+        train_dataset_list.append(train_data)
+        test_dataset_list.append(test_data)
+    train_dataset = ConcatDataset(train_dataset_list)
+    test_dataset = ConcatDataset(test_dataset_list)
+        
     print('train: {}, test: {}'.format(len(train_dataset), len(test_dataset)))
     
     train_variance = []

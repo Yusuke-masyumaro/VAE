@@ -99,7 +99,6 @@ class VQVAE(nn.Module):
         output = self.decoder(vq_quantize_reshape)
         if self.data_variance:
             reconstructed_error = torch.mean(torch.square(output - x)) / self.data_variance
-            print(vq_loss)
             vq_loss = vq_loss.mean()
             loss = reconstructed_error + vq_loss
             return {'z': z, 'x': x, 'loss': loss, 'reconstructed_error': reconstructed_error, 'vq_output': vq_quantize, 'output': output}
