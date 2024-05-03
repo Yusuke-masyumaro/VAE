@@ -5,3 +5,4 @@ dataset/
 audio/wandb/
 *.ipynb
 *.__pycache__
+*.pyc
