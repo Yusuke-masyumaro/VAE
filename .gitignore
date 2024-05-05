@@ -1,8 +1,7 @@
-*/__pycache__/
 audio/sampling/
-images/__pycache__/
 dataset/
 audio/wandb/
 *.ipynb
 *.__pycache__
 *.pyc
+*.wav

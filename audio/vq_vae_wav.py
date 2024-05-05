@@ -1,9 +1,7 @@
 import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import torch.nn.functional as F
+from torch.utils.data import Dataset
+from torch.optim import lr_scheduler
 import torchaudio
-import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -15,14 +13,14 @@ import model as model
 import os
 import wandb
 
-epochs = 50
+epochs = 100
 
 wandb.init(
     # set the wandb project where this run will be logged
-    project="VAE-ESC50",
+    project = "VAE-ESC50",
 
     # track hyperparameters and run metadata
-    config={
+    config = {
     'in_channels':params.in_channels,
     'hidden_dim':params.hidden_dim,
     'residual_hidden_dim':params.residual_hidden_dim,
@@ -93,7 +91,6 @@ if __name__ == '__main__':
         test_dataset_list.append(test_data)
     train_dataset = ConcatDataset(train_dataset_list)
     test_dataset = ConcatDataset(test_dataset_list)
-        
     print('train: {}, test: {}'.format(len(train_dataset), len(test_dataset)))
     
     train_variance = []
@@ -103,11 +100,15 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
     model, optimizer = model.get_model(train_variances)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size = 20, gamma = 0.1)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
+    
     for epoch in range(epochs):
-        train_losses = 0.0
+        train_loss = 0.0
         train_recon_loss = 0.0
+        train_vq_loss = 0.0
+        model.train()
         for _, data in tqdm(enumerate(train_loader)):
             x = data.to(device)
             output = model(x)
@@ -115,30 +116,29 @@ if __name__ == '__main__':
 
             loss = output['loss']
             loss.backward()
-            train_losses += loss.item()
-            train_recon_loss += output['reconstructed_error'].item()
+            train_loss += loss.item()
+            train_recon_loss += output['recon_loss'].item()
+            train_vq_loss += output['vq_loss'].item()
             optimizer.step()
-
+            
         model.eval()
-        test_losses = 0.0
         test_recon_loss = 0.0
         with torch.no_grad():
             for _, data in tqdm(enumerate(test_loader)):
                 x = data.to(device)
                 output = model(x)
-                loss = output['loss']
-                test_losses += loss.item()
-                test_recon_loss += output['reconstructed_error'].item()
+                test_recon_loss += output['loss'].item()
+        
+        scheduler.step()
 
-        print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, train_losses / len(train_loader.dataset), train_recon_loss / len(train_loader.dataset)))
-        print('epoch: {}, loss: {}, recon_loss: {}'.format(epoch, test_losses / len(test_loader.dataset), test_recon_loss / len(test_loader.dataset)))
-        print('output: {}, x: {}'.format(output['output'].shape, x.shape))
+        print('epoch: {}, loss: {}, recon_loss: {}, vq_loss: {}'.format(epoch, train_loss / len(train_loader.dataset),train_recon_loss / len(train_loader.dataset), train_vq_loss / len(train_loader.dataset)))
+        print('epoch: {}, loss: {}'.format(epoch, test_recon_loss / len(test_loader.dataset)))
         
         wandb.log({
-            "train_loss": train_losses / len(train_loader.dataset),
-            "train_recon_loss": train_recon_loss / len(train_loader.dataset),
-            "test_loss": test_losses / len(test_loader.dataset),
-            "test_recon_loss": test_recon_loss / len(test_loader.dataset)
+            "train_loss": train_loss / len(train_loader.dataset),
+            'train_recon_loss': train_recon_loss / len(train_loader.dataset),
+            'train_vq_loss': train_vq_loss / len(train_loader.dataset),
+            "test_loss": test_recon_loss / len(test_loader.dataset)
         })
         
         os.makedirs('./model', exist_ok = True)

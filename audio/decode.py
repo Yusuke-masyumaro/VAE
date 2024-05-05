@@ -3,7 +3,7 @@ import torchaudio
 from model import get_model
 
 if __name__ == '__main__':
-    wav_path = './sampling/original1.wav'
+    wav_path = '../dataset/ESC-50-master_16K/1-9887-A-49.wav'
     model, _ = get_model()
     model.load_state_dict(torch.load('./model/model.pth'))
     model.eval()
@@ -12,4 +12,4 @@ if __name__ == '__main__':
         wav = torchaudio.transforms.Resample(orig_freq = sr, new_freq = 16000)(wav)
         wav = wav.unsqueeze(0)
         output = model(wav)
-        torchaudio.save('./sampling/output.wav', output['output'].squeeze(0), 16000)
+        torchaudio.save('output.wav', output['output'].squeeze(0), 16000)
