@@ -4,12 +4,14 @@ from vector_quantize_pytorch import ResidualVQ, VectorQuantize
 
 import params as params
 
+#活性化関数の定義
 relu = nn.ReLU()
 leaky = nn.LeakyReLU(0.2)
 
+#残差ブロック
 class Residual(nn.Module):
     def __init__(self, in_channels, hidden_dim, num_residual_hidden):
-        super(Residual, self).__init__()
+        super().__init__()
         self.conv_one = nn.Conv1d(in_channels = in_channels, out_channels = num_residual_hidden, kernel_size = 3, stride = 1, padding = 1)
         self.conv_two = nn.Conv1d(in_channels = num_residual_hidden, out_channels = hidden_dim, kernel_size = 1, stride = 1)
 
@@ -21,18 +23,19 @@ class Residual(nn.Module):
 
 class ResidualStack(nn.Module):
     def __init__(self, in_channels, hidden_dim, num_residual_layers, num_residual_hidden):
-        super(ResidualStack, self).__init__()
+        super().__init__()
         self.num_residual_layers = num_residual_layers
         self.layers = nn.ModuleList([Residual(in_channels, hidden_dim, num_residual_hidden) for _ in range(num_residual_layers)])
 
     def forward(self, x):
-        for i in range(self.num_residual_layers):
-            x = self.layers[i](x)
+        for layer in self.layers:
+            x = layer(x)
         return relu(x)
 
+#エンコーダー
 class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_dim, num_residual_layers, residual_hidden_dim):
-        super(Encoder, self).__init__()
+        super().__init__()
         self.in_channels = in_channels
         self.hidden_dim = hidden_dim
         self.num_residual_layers = num_residual_layers
@@ -55,9 +58,10 @@ class Encoder(nn.Module):
                 x = layer(x)
         return self.residual_stack(x)
 
+#デコーダー
 class Decoder(nn.Module):
     def __init__(self, in_channels, hidden_dim, num_residual_layers, residual_hidden_dim):
-        super(Decoder, self).__init__()
+        super().__init__()
         self.in_channels = in_channels
         self.hidden_dim = hidden_dim
         self.num_residual_layers = num_residual_layers
@@ -81,9 +85,10 @@ class Decoder(nn.Module):
         x = self.d_layer_four(x)
         return torch.tanh(x)
 
+#VQ-VAE
 class VQVAE(nn.Module):
     def __init__(self, encoder, decoder, vq, data_variance = None):
-        super(VQVAE, self).__init__()
+        super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.vq = vq
@@ -103,6 +108,7 @@ class VQVAE(nn.Module):
         else:
             return {'z': z, 'x': x, 'vq_output': vq_quantize, 'output': output}
 
+#モデルの読み込み
 def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)

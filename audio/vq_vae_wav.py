@@ -15,11 +15,9 @@ import wandb
 
 epochs = 100
 
+#WandBでログの取得
 wandb.init(
-    # set the wandb project where this run will be logged
     project = "VAE-ESC50",
-
-    # track hyperparameters and run metadata
     config = {
     'in_channels':params.in_channels,
     'hidden_dim':params.hidden_dim,
@@ -35,22 +33,7 @@ wandb.init(
     }
 )
 
-class ESC_dataset(Dataset):
-    def __init__(self, df, path):
-        self.df = df
-        self.path = path
-        self.data_list = []
-        for file_name in tqdm(df['filename'].values):
-            wav, sr = torchaudio.load(self.path + file_name)
-            wav = torchaudio.transforms.Resample(orig_freq = sr, new_freq = 16000)(wav)
-            self.data_list.append(wav)
-
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        return self.data_list[idx]
-
+#sampling rate 16Khz, 16bit, 3sec
 class Dataset_16K(Dataset):
     def __init__(self, wav_list, path):
         self.path = path
@@ -66,21 +49,9 @@ class Dataset_16K(Dataset):
         return self.data_list[idx]
 
 if __name__ == '__main__':
-    '''
-    df = pd.read_csv('../dataset/ESC-50-master/meta/esc50.csv')
-    file_path = '../dataset/ESC-50-master/audio/'
-    train_df, test_df = train_test_split(df, test_size = 0.2)
-    train_dataset = ESC_dataset(train_df, file_path)
-    test_dataset = ESC_dataset(test_df, file_path)
-    '''
     
-    '''file_path = '../dataset/ESC-50-master_16K/'
-    data_list = os.listdir(file_path)
-    train_list, test_list = train_test_split(data_list, test_size = 0.2)
-    train_dataset = ESC_dataset_16K(train_list, file_path)
-    test_dataset = ESC_dataset_16K(test_list, file_path)
-    '''
-    path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/']
+    #データセットの読み込み、データローダの作成
+    path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/'] 
     train_dataset_list = []
     test_dataset_list = []
     for i in path_list:
@@ -92,18 +63,22 @@ if __name__ == '__main__':
     train_dataset = ConcatDataset(train_dataset_list)
     test_dataset = ConcatDataset(test_dataset_list)
     print('train: {}, test: {}'.format(len(train_dataset), len(test_dataset)))
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
     
+    #訓練データの分散を計算
     train_variance = []
     for wav in train_dataset:
         train_variance.append(wav)
     train_variances = torch.var(torch.stack(train_variance))
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
+    
+    #モデルの読み込み
     model, optimizer = model.get_model(train_variances)
     scheduler = lr_scheduler.StepLR(optimizer, step_size = 20, gamma = 0.1)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
+    #エポックごとにpthファイルを保存
     for epoch in range(epochs):
         train_loss = 0.0
         train_recon_loss = 0.0
@@ -113,7 +88,6 @@ if __name__ == '__main__':
             x = data.to(device)
             output = model(x)
             optimizer.zero_grad()
-
             loss = output['loss']
             loss.backward()
             train_loss += loss.item()
