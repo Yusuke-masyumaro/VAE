@@ -13,7 +13,7 @@ import model as model
 import os
 import wandb
 
-epochs = 100
+epochs = 200
 
 #WandBでログの取得
 wandb.init(
