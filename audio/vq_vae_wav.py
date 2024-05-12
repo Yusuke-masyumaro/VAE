@@ -13,7 +13,7 @@ import model as model
 import os
 import wandb
 
-epochs = 200
+epochs = 400
 
 #WandBでログの取得
 wandb.init(
@@ -21,10 +21,8 @@ wandb.init(
     config = {
     'in_channels':params.in_channels,
     'hidden_dim':params.hidden_dim,
-    'residual_hidden_dim':params.residual_hidden_dim,
-    'num_residual_layers':params.num_residual_layers,
     'embedding_dim':params.embedding_dim,
-    'num_embeddings':params.num_embeddings,
+    'codebook_size':params.codebook_size,
     'learning_rate':params.learning_rate,
     'batch_size':params.batch_size,
     "architecture": "VAE",
@@ -74,7 +72,7 @@ if __name__ == '__main__':
     
     #モデルの読み込み
     model, optimizer = model.get_model(train_variances)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size = 20, gamma = 0.1)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size = 40, gamma = 0.1)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
@@ -106,7 +104,7 @@ if __name__ == '__main__':
         scheduler.step()
 
         print('epoch: {}, loss: {}, recon_loss: {}, vq_loss: {}'.format(epoch, train_loss / len(train_loader.dataset),train_recon_loss / len(train_loader.dataset), train_vq_loss / len(train_loader.dataset)))
-        print('epoch: {}, loss: {}'.format(epoch, test_recon_loss / len(test_loader.dataset)))
+        print('epoch: {}, test_recon_loss: {}'.format(epoch, test_recon_loss / len(test_loader.dataset)))
         
         wandb.log({
             "train_loss": train_loss / len(train_loader.dataset),
@@ -115,5 +113,7 @@ if __name__ == '__main__':
             "test_loss": test_recon_loss / len(test_loader.dataset)
         })
         
-        os.makedirs('./model', exist_ok = True)
-        torch.save(model.state_dict(), './model/model.pth')
+        if epoch % 20 == 0:
+            os.makedirs('./model', exist_ok = True)
+            torch.save(model.state_dict(), './model/model_{}.pth'.format(epoch))
+        

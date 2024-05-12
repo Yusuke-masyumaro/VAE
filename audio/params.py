@@ -1,8 +1,6 @@
 in_channels = 1
-hidden_dim = 64
-residual_hidden_dim = 64
-num_residual_layers = 3
-embedding_dim = 64
-num_embeddings = 128
-learning_rate = 2e-3
-batch_size = 32
+hidden_dim = 16
+embedding_dim = 16
+codebook_size = 128
+learning_rate = 1e-5
+batch_size = 16

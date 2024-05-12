@@ -10,80 +10,73 @@ leaky = nn.LeakyReLU(0.2)
 
 #残差ブロック
 class Residual(nn.Module):
-    def __init__(self, in_channels, hidden_dim, num_residual_hidden):
+    def __init__(self, in_channels):
         super().__init__()
-        self.conv_one = nn.Conv1d(in_channels = in_channels, out_channels = num_residual_hidden, kernel_size = 3, stride = 1, padding = 1)
-        self.conv_two = nn.Conv1d(in_channels = num_residual_hidden, out_channels = hidden_dim, kernel_size = 1, stride = 1)
+        self.conv_one = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, kernel_size = 5, stride = 1, padding = 2)
+        self.conv_two = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, kernel_size = 1, stride = 1)
 
     def forward(self, x):
-        h = relu(x)
-        h = relu(self.conv_one(h))
+        h = relu(self.conv_one(x))
         h = self.conv_two(h)
         return x + h
 
 class ResidualStack(nn.Module):
-    def __init__(self, in_channels, hidden_dim, num_residual_layers, num_residual_hidden):
+    def __init__(self, in_channels):
         super().__init__()
-        self.num_residual_layers = num_residual_layers
-        self.layers = nn.ModuleList([Residual(in_channels, hidden_dim, num_residual_hidden) for _ in range(num_residual_layers)])
+        self.Residual_layers = Residual(in_channels)
 
     def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
+        x = self.Residual_layers(x)
         return relu(x)
+    
+class Layer_block(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+        self.residual_stack = ResidualStack(self.layer.out_channels)
+    
+    def forward(self, x):
+        x = leaky(self.layer(x))
+        return self.residual_stack(x)
 
 #エンコーダー
 class Encoder(nn.Module):
-    def __init__(self, in_channels, hidden_dim, num_residual_layers, residual_hidden_dim):
+    def __init__(self, in_channels, hidden_dim):
         super().__init__()
         self.in_channels = in_channels
         self.hidden_dim = hidden_dim
-        self.num_residual_layers = num_residual_layers
-        self.residual_hidden_dim = residual_hidden_dim
 
-        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 4, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 4, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_four = nn.Conv1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
-        self.residual_stack = ResidualStack(self.hidden_dim, self.hidden_dim, self.num_residual_layers, self.residual_hidden_dim)
-
-        self.encoder_layer = nn.ModuleList([self.e_layer_one, self.e_layer_two, self.e_layer_three, self.e_layer_four])
+        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 8, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 8, out_channels = self.hidden_dim // 4, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim // 4, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 2, padding = 2)
+        self.e_layer_four = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
+        
+        layer_list = [self.e_layer_one, self.e_layer_two, self.e_layer_three, self.e_layer_four]
+        self.encoder_layer = nn.ModuleList([Layer_block(layer) for layer in layer_list])
 
     def forward(self, x):
         for layer in self.encoder_layer:
-            if layer != self.e_layer_four:
-                x = layer(x)
-                x = leaky(x)
-            else:
-                x = layer(x)
-        return self.residual_stack(x)
+            x = layer(x)
+        return x
 
 #デコーダー
 class Decoder(nn.Module):
-    def __init__(self, in_channels, hidden_dim, num_residual_layers, residual_hidden_dim):
+    def __init__(self, in_channels, hidden_dim):
         super().__init__()
         self.in_channels = in_channels
         self.hidden_dim = hidden_dim
-        self.num_residual_layers = num_residual_layers
-        self.residual_hidden_dim = residual_hidden_dim
 
-        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim, kernel_size = 4, stride = 2, padding = 1)
-        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim, out_channels = self.hidden_dim // 2, kernel_size = 4, stride = 2, padding = 1)
-        self.residual_stack = ResidualStack(self.hidden_dim // 2, self.hidden_dim // 2, self.num_residual_layers, self.residual_hidden_dim)
-        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim // 4, kernel_size = 4, stride = 2, padding = 1)
-        self.d_layer_four = nn.ConvTranspose1d(in_channels = self.hidden_dim // 4, out_channels = 1, kernel_size = 4, stride = 2, padding = 1)
-
-        self. decoder_layer = nn.ModuleList([self.d_layer_one, self.d_layer_two ,self.residual_stack, self.d_layer_three])
+        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 4, stride = 2, padding = 1)
+        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim // 4, kernel_size = 4, stride = 2, padding = 1)
+        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 4, out_channels = self.hidden_dim // 8, kernel_size = 4, stride = 2, padding = 1)
+        self.d_layer_four = nn.ConvTranspose1d(in_channels = self.hidden_dim // 8, out_channels = 1, kernel_size = 4, stride = 2, padding = 1)
+        layer_list = [self.d_layer_one, self.d_layer_two, self.d_layer_three]
+        self.decoder_layer = nn.ModuleList([Layer_block(layer) for layer in layer_list])
 
     def forward(self, x):
         for layer in self.decoder_layer:
-            if layer == self.residual_stack:
-                x = layer(x)
-            else:
-                x = layer(x)
-                x = relu(x)
-        x = self.d_layer_four(x)
-        return torch.tanh(x)
+            x = layer(x)
+        return torch.tanh(self.d_layer_four(x))
 
 #VQ-VAE
 class VQVAE(nn.Module):
@@ -110,13 +103,13 @@ class VQVAE(nn.Module):
 
 #モデルの読み込み
 def get_model(data_variance = None):
-    encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
-    decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim, num_residual_layers = params.num_residual_layers, residual_hidden_dim = params.residual_hidden_dim)
+    encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim)
+    decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
-    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.num_embeddings, kmeans_init = True, kmeans_iters = 10, 
+    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 10, 
                     in_place_codebook_optimizer = lambda x: torch.optim.Adam(x, lr = params.learning_rate),
                     ema_update = False,
                     learnable_codebook = True)
     model = VQVAE(encoder, decoder, vq, data_variance = data_variance)
-    optimizer = torch.optim.Adam(model.parameters(), lr = params.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr = params.learning_rate)
     return model, optimizer
