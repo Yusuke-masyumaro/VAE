@@ -1,6 +1,7 @@
 audio/sampling/
 dataset/
 audio/wandb/
+audio/model/
 *.ipynb
 *.__pycache__
 *.pyc
