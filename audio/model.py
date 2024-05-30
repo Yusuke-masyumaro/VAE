@@ -1,83 +1,127 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from vector_quantize_pytorch import ResidualVQ, VectorQuantize
+import random
 
+from typing import Tuple, List, Optional
 import params as params
 
 #活性化関数の定義
-relu = nn.ReLU()
-leaky = nn.LeakyReLU(0.2)
+elu = nn.ELU()
 
 #残差ブロック
 class Residual(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, dilation):
         super().__init__()
-        self.conv_one = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, kernel_size = 5, stride = 1, padding = 2)
+        self.conv_one = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, kernel_size = 7, stride = 1, dilation = dilation, padding = 'same')
         self.conv_two = nn.Conv1d(in_channels = in_channels, out_channels = in_channels, kernel_size = 1, stride = 1)
 
     def forward(self, x):
-        h = relu(self.conv_one(x))
+        h = self.conv_one(x)
+        h = elu(h)
         h = self.conv_two(h)
-        return x + h
+        return elu(x + h)
 
 class ResidualStack(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, num_residual_layers = params.residual_layer_num):
         super().__init__()
-        self.Residual_layers = Residual(in_channels)
+        self.num_residual_layers = num_residual_layers
+        self.layers = nn.ModuleList([Residual(in_channels, params.dilations[i]) for i in range(num_residual_layers)])
 
     def forward(self, x):
-        x = self.Residual_layers(x)
-        return relu(x)
-    
-class Layer_block(nn.Module):
-    def __init__(self, layer):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+class Encoder_block(nn.Module):
+    def __init__(self, in_channels, stride):
         super().__init__()
-        self.layer = layer
-        self.residual_stack = ResidualStack(self.layer.out_channels)
+        self.layer = nn.Conv1d(in_channels = in_channels, out_channels = in_channels * 2, kernel_size = 2 * stride, stride = stride , padding = (2 * stride) // 2)
+        self.residual_stack = ResidualStack(in_channels * 2)
     
     def forward(self, x):
-        x = leaky(self.layer(x))
+        x = self.layer(x)
+        x = elu(x)
+        return self.residual_stack(x)
+        
+class Decoder_block(nn.Module):
+    def __init__(self, in_channels, stride):
+        super().__init__()
+        self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride, stride = stride, padding = (stride // 2))
+        self.residual_stack = ResidualStack(in_channels // 2)
+    
+    def forward(self, x):
+        x = self.layer(x)
+        x = elu(x)
         return self.residual_stack(x)
 
 #エンコーダー
 class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_dim):
         super().__init__()
-        self.in_channels = in_channels
-        self.hidden_dim = hidden_dim
-
-        self.e_layer_one = nn.Conv1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 8, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_two = nn.Conv1d(in_channels = self.hidden_dim // 8, out_channels = self.hidden_dim // 4, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_three = nn.Conv1d(in_channels = self.hidden_dim // 4, out_channels = self.hidden_dim // 2, kernel_size = 5, stride = 2, padding = 2)
-        self.e_layer_four = nn.Conv1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim, kernel_size = 5, stride = 2, padding = 2)
+        self.layer_one = nn.Conv1d(in_channels = in_channels, out_channels = hidden_dim // 16, kernel_size = 7, padding = 'same')
+        self.layer_two = Encoder_block(in_channels = hidden_dim // 16, stride = 2)
+        self.layer_three = Encoder_block(in_channels = hidden_dim // 8, stride = 3)
+        self.layer_four = Encoder_block(in_channels = hidden_dim // 4, stride = 4)
+        self.layer_five = Encoder_block(in_channels = hidden_dim // 2, stride = 5)
         
-        layer_list = [self.e_layer_one, self.e_layer_two, self.e_layer_three, self.e_layer_four]
-        self.encoder_layer = nn.ModuleList([Layer_block(layer) for layer in layer_list])
+        self.pre_conv = nn.Conv1d(in_channels = hidden_dim, out_channels = hidden_dim, kernel_size = 3, padding = 'same')
+        self.layer_list = [self.layer_one, self.layer_two, self.layer_three, self.layer_four, self.layer_five]
 
     def forward(self, x):
-        for layer in self.encoder_layer:
+        for layer in self.layer_list:
             x = layer(x)
+        x = self.pre_conv(x)
+        x = elu(x)
         return x
 
 #デコーダー
 class Decoder(nn.Module):
     def __init__(self, in_channels, hidden_dim):
         super().__init__()
-        self.in_channels = in_channels
-        self.hidden_dim = hidden_dim
-
-        self.d_layer_one = nn.ConvTranspose1d(in_channels = self.in_channels, out_channels = self.hidden_dim // 2, kernel_size = 4, stride = 2, padding = 1)
-        self.d_layer_two = nn.ConvTranspose1d(in_channels = self.hidden_dim // 2, out_channels = self.hidden_dim // 4, kernel_size = 4, stride = 2, padding = 1)
-        self.d_layer_three = nn.ConvTranspose1d(in_channels = self.hidden_dim // 4, out_channels = self.hidden_dim // 8, kernel_size = 4, stride = 2, padding = 1)
-        self.d_layer_four = nn.ConvTranspose1d(in_channels = self.hidden_dim // 8, out_channels = 1, kernel_size = 4, stride = 2, padding = 1)
-        layer_list = [self.d_layer_one, self.d_layer_two, self.d_layer_three]
-        self.decoder_layer = nn.ModuleList([Layer_block(layer) for layer in layer_list])
+        self.pre_transconv = nn.Conv1d(in_channels, hidden_dim, kernel_size = 3, padding = 'same')
+        self.layer_one = Decoder_block(in_channels = hidden_dim , stride = 5)
+        self.layer_two = Decoder_block(in_channels = hidden_dim // 2, stride = 4)
+        self.layer_three = Decoder_block(in_channels = hidden_dim // 4, stride = 3)
+        self.layer_four = Decoder_block(in_channels = hidden_dim // 8, stride = 2)
+        self.decoder_layer = [self.layer_one, self.layer_two, self.layer_three, self.layer_four]
+        self.layer_five = nn.Conv1d(in_channels = hidden_dim // 16, out_channels = 1, kernel_size = 7, padding = 'same')
 
     def forward(self, x):
+        x = elu(self.pre_transconv(x))
         for layer in self.decoder_layer:
             x = layer(x)
-        return torch.tanh(self.d_layer_four(x))
+        return torch.tanh(self.layer_five(x))
 
+class ReconstructionLoss(nn.Module):
+    """Reconstruction loss from https://arxiv.org/pdf/2107.03312.pdf
+    but uses STFT instead of mel-spectrogram
+    """
+    def __init__(self, eps = 1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, input, target):
+        loss = 0
+        input = input.to(torch.float32)
+        target = target.to(torch.float32)
+        for i in range(6, 12):
+            s = 2 ** i
+            alpha = (s / 2) ** 0.5
+            # We use STFT instead of 64-bin mel-spectrogram as n_fft=64 is too small
+            # for 64 bins.
+            x = torch.stft(input, n_fft=s, hop_length=s // 4, win_length=s, normalized=True, onesided=True, return_complex=True)
+            x = torch.abs(x)
+            y = torch.stft(target, n_fft=s, hop_length=s // 4, win_length=s, normalized=True, onesided=True, return_complex=True)
+            y = torch.abs(y)
+            if x.shape[-1] > y.shape[-1]:
+                x = x[:, :, :y.shape[-1]]
+            elif x.shape[-1] < y.shape[-1]:
+                y = y[:, :, :x.shape[-1]]
+            loss += torch.mean(torch.abs(x - y))
+            loss += alpha * torch.mean(torch.square(torch.log(x + self.eps) - torch.log(y + self.eps)))
+        return loss / (12 - 6)
 #VQ-VAE
 class VQVAE(nn.Module):
     def __init__(self, encoder, decoder, vq, data_variance = None):
@@ -86,6 +130,7 @@ class VQVAE(nn.Module):
         self.decoder = decoder
         self.vq = vq
         self.data_variance = data_variance
+        self.recon_loss = ReconstructionLoss()
 
     def forward(self, x):
         z = self.encoder(x)
@@ -94,7 +139,7 @@ class VQVAE(nn.Module):
         vq_quantize_reshape = vq_quantize.permute(0, 2, 1).contiguous()
         output = self.decoder(vq_quantize_reshape)
         if self.data_variance:
-            recon_loss = torch.mean(torch.square(output - x)) / self.data_variance
+            recon_loss = self.recon_loss(output[:, 0, :], x [:, 0, :])
             vq_loss = vq_loss.mean()
             loss = recon_loss + vq_loss
             return {'z': z, 'x': x, 'loss': loss, 'recon_loss': recon_loss, 'vq_loss': vq_loss, 'vq_output': vq_quantize, 'output': output}
@@ -106,10 +151,7 @@ def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
-    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 4, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 10, 
-                    in_place_codebook_optimizer = lambda x: torch.optim.Adam(x, lr = params.learning_rate),
-                    ema_update = False,
-                    learnable_codebook = True)
+    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 100, threshold_ema_dead_code = 2)
     model = VQVAE(encoder, decoder, vq, data_variance = data_variance)
     optimizer = torch.optim.AdamW(model.parameters(), lr = params.learning_rate)
     return model, optimizer

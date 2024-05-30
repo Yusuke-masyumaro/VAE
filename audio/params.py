@@ -1,6 +1,8 @@
 in_channels = 1
-hidden_dim = 16
-embedding_dim = 16
+hidden_dim = 32
+embedding_dim = 32
 codebook_size = 128
-learning_rate = 1e-5
-batch_size = 16
+residual_layer_num = 3
+learning_rate = 2e-5
+batch_size = 32
+dilations = [1, 3, 7]

@@ -2,6 +2,7 @@ audio/sampling/
 dataset/
 audio/wandb/
 audio/model/
+SoundStream/
 *.ipynb
 *.__pycache__
 *.pyc

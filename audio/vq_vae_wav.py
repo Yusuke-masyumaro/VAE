@@ -49,15 +49,21 @@ class Dataset_16K(Dataset):
 if __name__ == '__main__':
     
     #データセットの読み込み、データローダの作成
-    path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/'] 
+    path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/', '../dataset/librispeech_16K/'] 
     train_dataset_list = []
     test_dataset_list = []
     for i in path_list:
-        train_list, test_list = train_test_split(os.listdir(i), test_size = 0.2)
-        train_data = Dataset_16K(train_list, i)
-        test_data = Dataset_16K(test_list, i)
-        train_dataset_list.append(train_data)
-        test_dataset_list.append(test_data)
+        if i == '../dataset/librispeech_16K/':
+            train_data = Dataset_16K(os.listdir(i + 'train-clean-100/'), i + 'train-clean-100/')
+            test_data = Dataset_16K(os.listdir(i + 'test-clean/'), i + 'test-clean/')
+            train_dataset_list.append(train_data)
+            test_dataset_list.append(test_data)
+        else:
+            train_list, test_list = train_test_split(os.listdir(i), test_size = 0.2)
+            train_data = Dataset_16K(train_list, i)
+            test_data = Dataset_16K(test_list, i)
+            train_dataset_list.append(train_data)
+            test_dataset_list.append(test_data)
     train_dataset = ConcatDataset(train_dataset_list)
     test_dataset = ConcatDataset(test_dataset_list)
     print('train: {}, test: {}'.format(len(train_dataset), len(test_dataset)))
@@ -72,12 +78,12 @@ if __name__ == '__main__':
     
     #モデルの読み込み
     model, optimizer = model.get_model(train_variances)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size = 40, gamma = 0.1)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size = 20, gamma = 0.3)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
     #エポックごとにpthファイルを保存
-    for epoch in range(epochs):
+    for epoch in range(epochs + 1):
         train_loss = 0.0
         train_recon_loss = 0.0
         train_vq_loss = 0.0

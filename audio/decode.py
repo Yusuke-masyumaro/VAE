@@ -4,9 +4,9 @@ import torchaudio
 from model import get_model
 
 if __name__ == '__main__':
-    wav_path = '../dataset/ESC-50-master_16K/1-9887-A-49.wav'
+    wav_path = '../dataset/librispeech_16K/test-clean/61-70968-0000.wav'
     model, _ = get_model()
-    model.load_state_dict(torch.load('./model/model_20.pth'))
+    model.load_state_dict(torch.load('./model/model_400.pth'))
     model.eval()
     with torch.no_grad():
         wav, sr = torchaudio.load(wav_path)
