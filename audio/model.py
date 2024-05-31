@@ -9,8 +9,9 @@ import params as params
 
 #活性化関数の定義
 elu = nn.ELU()
+leaky = nn.LeakyReLU(0.3)
 
-#残差ブロック
+#残差ブロ�?ク
 class Residual(nn.Module):
     def __init__(self, in_channels, dilation):
         super().__init__()
@@ -76,7 +77,7 @@ class Encoder(nn.Module):
         x = elu(x)
         return x
 
-#デコーダー
+#�?コーダー
 class Decoder(nn.Module):
     def __init__(self, in_channels, hidden_dim):
         super().__init__()
@@ -122,6 +123,7 @@ class ReconstructionLoss(nn.Module):
             loss += torch.mean(torch.abs(x - y))
             loss += alpha * torch.mean(torch.square(torch.log(x + self.eps) - torch.log(y + self.eps)))
         return loss / (12 - 6)
+
 #VQ-VAE
 class VQVAE(nn.Module):
     def __init__(self, encoder, decoder, vq, data_variance = None):
@@ -146,7 +148,83 @@ class VQVAE(nn.Module):
         else:
             return {'z': z, 'x': x, 'vq_output': vq_quantize, 'output': output}
 
-#モデルの読み込み
+class Resnet2d(nn.Module):
+    def __init__(self, n_channels, factor, stride):
+        super().__init__()
+        self.layer_one = nn.Conv2d(in_channels = n_channels, out_channels = n_channels, kernel_size = (3, 3), padding = 'same')
+        self.batch_norm_one = nn.BatchNorm2d(n_channels)
+        self.layer_two = nn.Conv2d(in_channels = n_channels, out_channels = factor * n_channels, kernel_size = (stride[0] + 2, stride[1] + 2), stride = stride)
+        self.layer_three = nn.Conv2d(in_channels = n_channels, out_channels = factor * n_channels, kernel_size = 1, stride = stride)
+        self.batch_norm_two = nn.BatchNorm2d(factor * n_channels)
+        self.pad = nn.ReflectionPad2d([(stride[1] + 1) // 2, (stride[1] + 2) // 2, (stride[0] + 1) // 2, (stride[0] + 2) // 2])
+
+    def forward(self, input):
+        x = self.layer_one(input)
+        x = self.batch_norm_one(x)
+        x = leaky(x)
+        x = self.pad(x)
+        x = self.layer_two(x)
+        x = self.batch_norm_two(x)
+
+        y = self.layer_three(input)
+        y = self.batch_norm_two(y)
+        return leaky(x + y)
+
+class WaveDiscriminator(nn.Module):
+    def __init__(self, n_channels ,resolution = 1):
+        super().__init__()
+        if resolution == 1:
+            self.avg_pool = nn.Identity()
+        else:
+            self.abg_pool = nn.AbgPool2d(kernel_size = (resolution * 2), stride = resolution)
+        self.layers = nn.ModuleList([
+            nn.utils.weight_norm(nn.Conv1d(1, n_channels, kernel_size=15, padding=7)),
+            nn.utils.weight_norm(nn.Conv1d(n_channels, 4 * n_channels, kernel_size=41, stride=4, padding=20, groups=4)),
+            nn.utils.weight_norm(nn.Conv1d(4 * n_channels, 16 * n_channels, kernel_size=41, stride=4, padding=20, groups=16)),
+            nn.utils.weight_norm(nn.Conv1d(16 * n_channels, 64 * n_channels, kernel_size=41, stride=4, padding=20, groups=64)),
+            nn.utils.weight_norm(nn.Conv1d(64 * n_channels, 256 * n_channels, kernel_size=41, stride=4, padding=20, groups=256)),
+            nn.utils.weight_norm(nn.Conv1d(256 * n_channels, 256 * n_channels, kernel_size=5, padding=2)),
+            nn.utils.weight_norm(nn.Conv1d(256 * n_channels, 1, kernel_size=3, padding=1)),
+        ])
+
+    def forward(self, x):
+        x = self.avg_pool(x)
+        features = []
+        for layer in self.layers[:-1]:
+            x = layer(x)
+            features.append(x)
+            x = leaky(x)
+        features.append(self.layers[-1](x))
+        return features
+
+class STFTDiscriminator(nn.Module):
+    def __init__(self, n_fft = 1024, hop_length = 256, n_channels = 32):
+        super().__init__()
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        n = n_fft // 2 + 1
+        for _ in range(6):
+            n = (n - 1) // 2 + 1
+        self.layers = nn.Sequential(
+            nn.Conv2d(1, n_channels, kernel_size=7, padding='same'),
+            nn.LeakyReLU(0.3, inplace=True),
+            Resnet2d(n_channels, 2, stride=(2, 1)),
+            Resnet2d(2 * n_channels, 2, stride=(2, 2)),
+            Resnet2d(4 * n_channels, 1, stride=(2, 1)),
+            Resnet2d(4 * n_channels, 2, stride=(2, 2)),
+            Resnet2d(8 * n_channels, 1, stride=(2, 1)),
+            Resnet2d(8 * n_channels, 2, stride=(2, 2)),
+            nn.Conv2d(16 * n_channels, 1, kernel_size=(n, 1))
+        )
+
+    def forward(self, x):
+        x = torch.squeeze(input, 1).to(torch.float32)
+        x = torch.stft(x, self.n_fft, self.hop_length, normalized = True, onesided = True, return_complex = True)
+        x = torch.abs(x)
+        x = x.unsqueeze(1)
+        return self.layers(x)
+
+#モ�?ルの読み込み
 def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim)
