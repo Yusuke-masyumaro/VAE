@@ -4,14 +4,13 @@ import torch.nn.functional as F
 from vector_quantize_pytorch import ResidualVQ, VectorQuantize
 import random
 
+from itertools import chain
 from typing import Tuple, List, Optional
 import params as params
 
-#活性化関数の定義
 elu = nn.ELU()
 leaky = nn.LeakyReLU(0.3)
 
-#残差ブロ�?ク
 class Residual(nn.Module):
     def __init__(self, in_channels, dilation):
         super().__init__()
@@ -40,24 +39,23 @@ class Encoder_block(nn.Module):
         super().__init__()
         self.layer = nn.Conv1d(in_channels = in_channels, out_channels = in_channels * 2, kernel_size = 2 * stride, stride = stride , padding = (2 * stride) // 2)
         self.residual_stack = ResidualStack(in_channels * 2)
-    
-    def forward(self, x):
-        x = self.layer(x)
-        x = elu(x)
-        return self.residual_stack(x)
-        
-class Decoder_block(nn.Module):
-    def __init__(self, in_channels, stride):
-        super().__init__()
-        self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride, stride = stride, padding = (stride // 2))
-        self.residual_stack = ResidualStack(in_channels // 2)
-    
+
     def forward(self, x):
         x = self.layer(x)
         x = elu(x)
         return self.residual_stack(x)
 
-#エンコーダー
+class Decoder_block(nn.Module):
+    def __init__(self, in_channels, stride):
+        super().__init__()
+        self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride, stride = stride, padding = (stride // 2))
+        self.residual_stack = ResidualStack(in_channels // 2)
+
+    def forward(self, x):
+        x = self.layer(x)
+        x = elu(x)
+        return self.residual_stack(x)
+
 class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_dim):
         super().__init__()
@@ -66,7 +64,7 @@ class Encoder(nn.Module):
         self.layer_three = Encoder_block(in_channels = hidden_dim // 8, stride = 3)
         self.layer_four = Encoder_block(in_channels = hidden_dim // 4, stride = 4)
         self.layer_five = Encoder_block(in_channels = hidden_dim // 2, stride = 5)
-        
+
         self.pre_conv = nn.Conv1d(in_channels = hidden_dim, out_channels = hidden_dim, kernel_size = 3, padding = 'same')
         self.layer_list = [self.layer_one, self.layer_two, self.layer_three, self.layer_four, self.layer_five]
 
@@ -77,7 +75,6 @@ class Encoder(nn.Module):
         x = elu(x)
         return x
 
-#�?コーダー
 class Decoder(nn.Module):
     def __init__(self, in_channels, hidden_dim):
         super().__init__()
@@ -110,8 +107,6 @@ class ReconstructionLoss(nn.Module):
         for i in range(6, 12):
             s = 2 ** i
             alpha = (s / 2) ** 0.5
-            # We use STFT instead of 64-bin mel-spectrogram as n_fft=64 is too small
-            # for 64 bins.
             x = torch.stft(input, n_fft=s, hop_length=s // 4, win_length=s, normalized=True, onesided=True, return_complex=True)
             x = torch.abs(x)
             y = torch.stft(target, n_fft=s, hop_length=s // 4, win_length=s, normalized=True, onesided=True, return_complex=True)
@@ -124,7 +119,7 @@ class ReconstructionLoss(nn.Module):
             loss += alpha * torch.mean(torch.square(torch.log(x + self.eps) - torch.log(y + self.eps)))
         return loss / (12 - 6)
 
-#VQ-VAE
+
 class VQVAE(nn.Module):
     def __init__(self, encoder, decoder, vq, data_variance = None):
         super().__init__()
@@ -171,7 +166,7 @@ class Resnet2d(nn.Module):
         return leaky(x + y)
 
 class WaveDiscriminator(nn.Module):
-    def __init__(self, n_channels ,resolution = 1):
+    def __init__(self, n_channels = 4, resolution = 1):
         super().__init__()
         if resolution == 1:
             self.avg_pool = nn.Identity()
@@ -224,12 +219,17 @@ class STFTDiscriminator(nn.Module):
         x = x.unsqueeze(1)
         return self.layers(x)
 
-#モ�?ルの読み込み
 def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
     vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 100, threshold_ema_dead_code = 2)
+    wav_discriminator = nn.ModuleList([WaveDiscriminator(resolution = 1),
+                                    WaveDiscriminator(resolution = 2),
+                                    WaveDiscriminator(resolution = 4)])
+    stft_discriminator = STFTDiscriminator()
+
     model = VQVAE(encoder, decoder, vq, data_variance = data_variance)
-    optimizer = torch.optim.AdamW(model.parameters(), lr = params.learning_rate)
-    return model, optimizer
+    optimizer_g = torch.optim.Adam(model.parameters(), lr = params.learning_rate)
+    optimizer_d = torch.optim.Adam(chain(wav_discriminator.parameters(), stft_discriminator.parameters()), lr = params.learning_rate)
+    return model, optimizer_g, optimizer_d, wav_discriminator, stft_discriminator
