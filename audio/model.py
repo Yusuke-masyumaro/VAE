@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils import parametrizations
 from vector_quantize_pytorch import ResidualVQ, VectorQuantize
 import random
 
@@ -37,7 +38,7 @@ class ResidualStack(nn.Module):
 class Encoder_block(nn.Module):
     def __init__(self, in_channels, stride):
         super().__init__()
-        self.layer = nn.Conv1d(in_channels = in_channels, out_channels = in_channels * 2, kernel_size = 2 * stride, stride = stride , padding = (2 * stride) // 2)
+        self.layer = nn.Conv1d(in_channels = in_channels, out_channels = in_channels * 2, kernel_size = 2 * stride, stride = stride , padding = stride - 1)
         self.residual_stack = ResidualStack(in_channels * 2)
 
     def forward(self, x):
@@ -48,7 +49,10 @@ class Encoder_block(nn.Module):
 class Decoder_block(nn.Module):
     def __init__(self, in_channels, stride):
         super().__init__()
-        self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride, stride = stride, padding = (stride // 2))
+        if stride % 2 != 0:
+            self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride + 1, stride = stride, padding = (stride // 2) + 1)
+        else:
+            self.layer = nn.ConvTranspose1d(in_channels = in_channels, out_channels = in_channels // 2, kernel_size = 2 * stride, stride = stride, padding = stride // 2)
         self.residual_stack = ResidualStack(in_channels // 2)
 
     def forward(self, x):
@@ -171,16 +175,14 @@ class WaveDiscriminator(nn.Module):
         if resolution == 1:
             self.avg_pool = nn.Identity()
         else:
-            self.abg_pool = nn.AbgPool2d(kernel_size = (resolution * 2), stride = resolution)
-        self.layers = nn.ModuleList([
-            nn.utils.weight_norm(nn.Conv1d(1, n_channels, kernel_size=15, padding=7)),
-            nn.utils.weight_norm(nn.Conv1d(n_channels, 4 * n_channels, kernel_size=41, stride=4, padding=20, groups=4)),
-            nn.utils.weight_norm(nn.Conv1d(4 * n_channels, 16 * n_channels, kernel_size=41, stride=4, padding=20, groups=16)),
-            nn.utils.weight_norm(nn.Conv1d(16 * n_channels, 64 * n_channels, kernel_size=41, stride=4, padding=20, groups=64)),
-            nn.utils.weight_norm(nn.Conv1d(64 * n_channels, 256 * n_channels, kernel_size=41, stride=4, padding=20, groups=256)),
-            nn.utils.weight_norm(nn.Conv1d(256 * n_channels, 256 * n_channels, kernel_size=5, padding=2)),
-            nn.utils.weight_norm(nn.Conv1d(256 * n_channels, 1, kernel_size=3, padding=1)),
-        ])
+            self.avg_pool = nn.AvgPool1d(kernel_size = (resolution * 2), stride = resolution)
+        self.layers = nn.ModuleList([parametrizations.weight_norm(nn.Conv1d(1, n_channels, kernel_size = 25, stride = 4, padding = 11)),
+                    parametrizations.weight_norm(nn.Conv1d(n_channels, 4 * n_channels, kernel_size = 25, stride = 4, padding = 11, groups = 4)),
+                    parametrizations.weight_norm(nn.Conv1d(4 * n_channels, 16 * n_channels, kernel_size = 25, stride = 4, padding = 11, groups = 16)),
+                    parametrizations.weight_norm(nn.Conv1d(16 * n_channels, 64 * n_channels, kernel_size = 25, stride = 4, padding = 11, groups = 64)),
+                    parametrizations.weight_norm(nn.Conv1d(64 * n_channels, 256 * n_channels, kernel_size = 25, stride = 4, padding = 11, groups = 256)),
+                    parametrizations.weight_norm(nn.Conv1d(256 * n_channels, 256 * n_channels, kernel_size = 5, stride = 1, padding = 2)),
+                    parametrizations.weight_norm(nn.Conv1d(256 * n_channels, 1, kernel_size = 3, stride = 1, padding = 1))])
 
     def forward(self, x):
         x = self.avg_pool(x)
@@ -213,7 +215,7 @@ class STFTDiscriminator(nn.Module):
         )
 
     def forward(self, x):
-        x = torch.squeeze(input, 1).to(torch.float32)
+        x = x.squeeze(1).to(torch.float32)
         x = torch.stft(x, self.n_fft, self.hop_length, normalized = True, onesided = True, return_complex = True)
         x = torch.abs(x)
         x = x.unsqueeze(1)
@@ -223,10 +225,10 @@ def get_model(data_variance = None):
     encoder = Encoder(in_channels = params.in_channels, hidden_dim = params.hidden_dim)
     decoder = Decoder(in_channels = params.embedding_dim, hidden_dim = params.hidden_dim)
     #vq = VectorQuantize(dim = params.embedding_dim, codebook_size = params.num_embeddings)
-    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 100, threshold_ema_dead_code = 2)
-    wav_discriminator = nn.ModuleList([WaveDiscriminator(resolution = 1),
-                                    WaveDiscriminator(resolution = 2),
-                                    WaveDiscriminator(resolution = 4)])
+    vq = ResidualVQ(dim = params.embedding_dim, num_quantizers = 8, codebook_size = params.codebook_size, kmeans_init = True, kmeans_iters = 100, threshold_ema_dead_code = 2, learnable_codebook = True, ema_update = False)
+    wav_discriminator = nn.ModuleList([WaveDiscriminator(resolution = 1), 
+                                       WaveDiscriminator(resolution = 2),
+                                       WaveDiscriminator(resolution = 4)])
     stft_discriminator = STFTDiscriminator()
 
     model = VQVAE(encoder, decoder, vq, data_variance = data_variance)

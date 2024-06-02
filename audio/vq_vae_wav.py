@@ -13,7 +13,7 @@ import model as model
 import os
 import wandb
 
-epochs = 400
+epochs = 100
 
 wandb.init(
     project = "VAE-ESC50",
@@ -46,7 +46,6 @@ class Dataset_16K(Dataset):
         return self.data_list[idx]
 
 if __name__ == '__main__':
-    
     path_list = ['../dataset/ESC-50-master_16K/', '../dataset/Urban_16K/', '../dataset/librispeech_16K/'] 
     train_dataset_list = []
     test_dataset_list = []
@@ -68,6 +67,7 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = params.batch_size, shuffle = True, num_workers = 2)
     
+    
     train_variance = []
     for wav in train_dataset:
         train_variance.append(wav)
@@ -76,6 +76,8 @@ if __name__ == '__main__':
     model, optimizer_g, optimizer_d, wav_discriminator, stft_discriminator = model.get_model(train_variances)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
+    wav_discriminator.to(device)
+    stft_discriminator.to(device)
     
     for epoch in range(epochs + 1):
         train_loss = 0.0
@@ -83,8 +85,6 @@ if __name__ == '__main__':
         train_vq_loss = 0.0
         model.train()
         for _, data in tqdm(enumerate(train_loader)):
-            optimizer_g.zero_grad()
-            optimizer_d.zero_grad()
             x = data.to(device)
             output = model(x)
 
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             g_wave_loss = 0
             g_feature_loss = 0
             for i in range(3):
-                feature_input = wav_discriminator[i](output[x])
+                feature_input = wav_discriminator[i](x)
                 feature_out = wav_discriminator[i](output['output'])
                 g_wave_loss += torch.mean(torch.relu(1 - feature_out[-1]))
                 g_feature_loss += sum(torch.mean(torch.abs(f1 - f2)) for f1, f2 in zip(feature_input[:-1], feature_out[:-1])) / (len(feature_input) - 1)
@@ -101,11 +101,10 @@ if __name__ == '__main__':
             g_feature_loss = g_feature_loss / 3
             g_adversarial_loss = (g_stft_loss + g_wave_loss) / 4
             g_loss = g_adversarial_loss + (100 * g_feature_loss) + output['loss']
-            g_loss.backward()
+            g_loss.backward(retain_graph = True)
             optimizer_g.step()
-
-            loss = output['loss']
-            loss.backward()
+            optimizer_g.zero_grad()
+            
             train_loss += g_loss.item()
             train_recon_loss += output['recon_loss'].item()
             train_vq_loss += output['vq_loss'].item()
@@ -119,12 +118,13 @@ if __name__ == '__main__':
             d_wave_loss = 0
             for i in range(3):
                 feature_input = wav_discriminator[i](x)
-                d_wave_loss += torch.mean(torch.relu(1 - feature_input))
+                d_wave_loss += torch.mean(torch.relu(1 - feature_input[-1]))
                 feature_out = wav_discriminator[i](output['output'])
-                d_wave_loss += torch.mean(torch.relu(1 + feature_out))
+                d_wave_loss += torch.mean(torch.relu(1 + feature_out[-1]))
             d_loss = (d_stft_loss + d_wave_loss) / 4
-            d_loss.backward()
+            '''d_loss.backward()
             optimizer_d.step()
+            optimizer_d.zero_grad()'''
 
         model.eval()
         test_recon_loss = 0.0
@@ -132,7 +132,7 @@ if __name__ == '__main__':
             for _, data in tqdm(enumerate(test_loader)):
                 x = data.to(device)
                 output = model(x)
-                test_recon_loss += output['loss'].item()
+                test_recon_loss += output['recon_loss'].item() + output['vq_loss'].item()
 
 
         print('epoch: {}, loss: {}, recon_loss: {}, vq_loss: {}'.format(epoch, train_loss / len(train_loader.dataset),train_recon_loss / len(train_loader.dataset), train_vq_loss / len(train_loader.dataset)))
@@ -145,6 +145,6 @@ if __name__ == '__main__':
             "test_loss": test_recon_loss / len(test_loader.dataset)
         })
 
-        if epoch % 20 == 0:
+        if epoch % 5 == 0:
             os.makedirs('./model', exist_ok = True)
             torch.save(model.state_dict(), './model/model_{}.pth'.format(epoch))
